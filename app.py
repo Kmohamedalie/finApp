@@ -32,7 +32,6 @@ def fetch_cached_data(data_dict: dict, cleaning_dict: dict):
         path=Path("dummy.yaml"), 
         data={"data": data_dict, "cleaning": cleaning_dict}
     )
-    # Load the data via your existing loader pipeline
     return load_prices(temp_cfg)
 
 
@@ -64,6 +63,7 @@ if st.button("🚀 Generate Report", type="primary"):
     run_dir = temp_dir / "run"
     run_dir.mkdir(parents=True, exist_ok=True)
     
+    # Build the configuration dictionary dynamically from UI inputs
     config_dict = {
         "data": {
             "source_type": "yfinance",
@@ -109,7 +109,7 @@ if st.button("🚀 Generate Report", type="primary"):
             cfg = Config.from_file(cfg_path)
             msgs = RunMessages()
 
-            # 1) Load (Using our new cached wrapper!)
+            # 1) Load (Using our cached wrapper)
             loaded = fetch_cached_data(config_dict["data"], config_dict["cleaning"])
             
             # 2) Clean + Returns + Attribution
@@ -125,7 +125,7 @@ if st.button("🚀 Generate Report", type="primary"):
             # 5) Reports
             outputs = generate_reports(cleaned.prices, cleaned.returns, kpi, figs, attrib, cfg, msgs=msgs)
 
-            # Store results in session state
+            # Store results in session state to survive Streamlit reruns
             st.session_state.kpi_summary = kpi.summary
             st.session_state.warnings = msgs.warnings
             st.session_state.fig_prices = str(figs.prices) if figs.prices else None
@@ -146,25 +146,59 @@ if st.button("🚀 Generate Report", type="primary"):
 if st.session_state.report_generated:
     st.success("Report generated successfully!")
 
-    st.subheader("📊 Key Performance Indicators")
-    st.dataframe(st.session_state.kpi_summary, use_container_width=True)
+    # Create the tabs
+    tab_kpi, tab_viz, tab_dl = st.tabs([
+        "📊 KPIs & Analysis", 
+        "📈 Visualizations", 
+        "📥 Downloads"
+    ])
 
-    if st.session_state.warnings:
-        for warn in st.session_state.warnings:
-            st.warning(warn)
+    # --- TAB 1: KPIs & Analysis ---
+    with tab_kpi:
+        st.subheader("Key Performance Indicators")
+        st.dataframe(st.session_state.kpi_summary, use_container_width=True)
 
-    st.subheader("📈 Visualizations")
-    col1, col2 = st.columns(2)
-    if st.session_state.fig_prices:
-        col1.image(st.session_state.fig_prices, caption="Prices")
-    if st.session_state.fig_drawdowns and include_drawdowns:
-        col2.image(st.session_state.fig_drawdowns, caption="Drawdowns")
+        if st.session_state.warnings:
+            st.markdown("### ⚠️ Data Quality Notes")
+            for warn in st.session_state.warnings:
+                st.warning(warn)
+
+    # --- TAB 2: Visualizations ---
+    with tab_viz:
+        st.subheader("Market Visualizations")
         
-    if st.session_state.fig_boxplot:
-        st.image(st.session_state.fig_boxplot, caption="Return Distributions (Boxplot)")
+        # Prices and Drawdowns side-by-side
+        col1, col2 = st.columns(2)
+        if st.session_state.fig_prices:
+            col1.image(st.session_state.fig_prices, caption="Prices", use_container_width=True)
+            
+        if st.session_state.fig_drawdowns and include_drawdowns:
+            col2.image(st.session_state.fig_drawdowns, caption="Drawdowns", use_container_width=True)
+            
+        # Boxplot spans the full width below
+        if st.session_state.fig_boxplot:
+            st.markdown("---")
+            st.image(st.session_state.fig_boxplot, caption="Return Distributions (Boxplot)", use_container_width=True)
 
-    st.subheader("📥 Download Reports")
-    dl_col1, dl_col2 = st.columns(2)
-    
-    dl_col1.download_button("Download PDF Report", st.session_state.pdf_bytes, file_name="Financial_Report.pdf", mime="application/pdf")
-    dl_col2.download_button("Download HTML Report", st.session_state.html_bytes, file_name="Financial_Report.html", mime="text/html")
+    # --- TAB 3: Downloads ---
+    with tab_dl:
+        st.subheader("Download Generated Reports")
+        st.markdown("Grab the fully formatted PDF or interactive HTML reports below.")
+        
+        dl_col1, dl_col2 = st.columns(2)
+        
+        dl_col1.download_button(
+            label="📄 Download PDF Report", 
+            data=st.session_state.pdf_bytes, 
+            file_name="Financial_Report.pdf", 
+            mime="application/pdf",
+            use_container_width=True
+        )
+        
+        dl_col2.download_button(
+            label="🌐 Download HTML Report", 
+            data=st.session_state.html_bytes, 
+            file_name="Financial_Report.html", 
+            mime="text/html",
+            use_container_width=True
+        )
