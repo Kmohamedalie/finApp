@@ -1,0 +1,8 @@
+streamlit
+pandas
+numpy
+PyYAML
+yfinance
+matplotlib
+reportlab
+openpyxl
