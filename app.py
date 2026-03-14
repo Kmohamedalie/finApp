@@ -52,6 +52,15 @@ report_title = st.sidebar.text_input("Report Title", "Interactive Financial Repo
 include_rolling = st.sidebar.checkbox("Include Rolling Metrics", value=True)
 include_drawdowns = st.sidebar.checkbox("Include Drawdowns", value=True)
 
+# --- CREDITS SECTION ---
+st.sidebar.markdown("---")
+st.sidebar.header("👨‍💻 About the Developers")
+st.sidebar.markdown("""
+**Core Engine & Financial Logic:** Created by [Mikel Lopez](https://www.linkedin.com/in/mikellopezfinance/) as part of his Bachelor's thesis work.
+
+**Interactive Web Application:** Built by [Mohamed Alie Kamara](https://www.linkedin.com/in/mohamed-alie-kamara-8765941a4/) to bring this tool to non-technical users.
+""")
+
 
 # --- INITIALIZE SESSION STATE ---
 if "report_generated" not in st.session_state:
@@ -64,6 +73,7 @@ if st.button("🚀 Generate Report", type="primary"):
     run_dir = temp_dir / "run"
     run_dir.mkdir(parents=True, exist_ok=True)
     
+    # Build the configuration dictionary dynamically from UI inputs
     config_dict = {
         "data": {
             "source_type": "yfinance",
@@ -116,13 +126,13 @@ if st.button("🚀 Generate Report", type="primary"):
             cleaned = clean_and_normalize(loaded.prices, cfg)
             attrib = compute_attribution(cleaned.returns, loaded.weights) if loaded.weights is not None else None
             
-            # 3) KPIs 
+            # 3) KPIs
             kpi = compute_kpis(cleaned.returns, cfg)
             
-            # 4) Visuals 
+            # 4) Visuals
             figs = generate_all_figures(cleaned.prices, cleaned.returns, kpi, cfg)
             
-            # 5) Reports 
+            # 5) Reports
             outputs = generate_reports(cleaned.prices, cleaned.returns, kpi, figs, attrib, cfg, msgs=msgs)
 
             # Store results in session state to survive Streamlit reruns
@@ -147,7 +157,7 @@ if st.button("🚀 Generate Report", type="primary"):
 if st.session_state.report_generated:
     st.success("Report generated successfully!")
 
-    # Create the tabs (now with a 4th tab for the HTML preview!)
+    # Create the tabs (including the HTML preview)
     tab_kpi, tab_viz, tab_report, tab_dl = st.tabs([
         "📊 KPIs & Analysis", 
         "📈 Visualizations", 
