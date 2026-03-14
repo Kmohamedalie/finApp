@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import yaml
 import tempfile
 from pathlib import Path
@@ -63,7 +64,6 @@ if st.button("🚀 Generate Report", type="primary"):
     run_dir = temp_dir / "run"
     run_dir.mkdir(parents=True, exist_ok=True)
     
-    # Build the configuration dictionary dynamically from UI inputs
     config_dict = {
         "data": {
             "source_type": "yfinance",
@@ -116,13 +116,13 @@ if st.button("🚀 Generate Report", type="primary"):
             cleaned = clean_and_normalize(loaded.prices, cfg)
             attrib = compute_attribution(cleaned.returns, loaded.weights) if loaded.weights is not None else None
             
-            # 3) KPIs
+            # 3) KPIs 
             kpi = compute_kpis(cleaned.returns, cfg)
             
-            # 4) Visuals
+            # 4) Visuals 
             figs = generate_all_figures(cleaned.prices, cleaned.returns, kpi, cfg)
             
-            # 5) Reports
+            # 5) Reports 
             outputs = generate_reports(cleaned.prices, cleaned.returns, kpi, figs, attrib, cfg, msgs=msgs)
 
             # Store results in session state to survive Streamlit reruns
@@ -142,14 +142,16 @@ if st.button("🚀 Generate Report", type="primary"):
     except Exception as e:
         st.error(f"Pipeline Error: {e}")
 
+
 # --- DISPLAY RESULTS IN APP ---
 if st.session_state.report_generated:
     st.success("Report generated successfully!")
 
-    # Create the tabs
-    tab_kpi, tab_viz, tab_dl = st.tabs([
+    # Create the tabs (now with a 4th tab for the HTML preview!)
+    tab_kpi, tab_viz, tab_report, tab_dl = st.tabs([
         "📊 KPIs & Analysis", 
         "📈 Visualizations", 
+        "📄 View Report",
         "📥 Downloads"
     ])
 
@@ -180,7 +182,16 @@ if st.session_state.report_generated:
             st.markdown("---")
             st.image(st.session_state.fig_boxplot, caption="Return Distributions (Boxplot)", use_container_width=True)
 
-    # --- TAB 3: Downloads ---
+    # --- TAB 3: View HTML Report ---
+    with tab_report:
+        st.subheader("Interactive Report Preview")
+        st.info("Scroll through the full generated HTML report below.")
+        
+        # Decode the bytes to a standard string and render the HTML
+        html_string = st.session_state.html_bytes.decode("utf-8")
+        components.html(html_string, height=800, scrolling=True)
+
+    # --- TAB 4: Downloads ---
     with tab_dl:
         st.subheader("Download Generated Reports")
         st.markdown("Grab the fully formatted PDF or interactive HTML reports below.")
