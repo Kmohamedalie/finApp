@@ -1,7 +1,6 @@
 import streamlit as st
 import yaml
 import tempfile
-import shutil
 from pathlib import Path
 from datetime import datetime
 
@@ -35,6 +34,10 @@ st.sidebar.header("3. Reporting Options")
 report_title = st.sidebar.text_input("Report Title", "Interactive Financial Report")
 include_rolling = st.sidebar.checkbox("Include Rolling Metrics", value=True)
 include_drawdowns = st.sidebar.checkbox("Include Drawdowns", value=True)
+
+# --- INITIALIZE SESSION STATE ---
+if "report_generated" not in st.session_state:
+    st.session_state.report_generated = False
 
 # --- MAIN EXECUTION BLOCK ---
 if st.button("🚀 Generate Report", type="primary"):
@@ -80,7 +83,7 @@ if st.button("🚀 Generate Report", type="primary"):
         }
     }
     
-    # Save to a temporary YAML file so your Config class can load it
+    # Save to a temporary YAML file so the Config class can load it
     cfg_path = temp_dir / "config.yaml"
     with open(cfg_path, "w") as f:
         yaml.dump(config_dict, f)
@@ -91,53 +94,55 @@ if st.button("🚀 Generate Report", type="primary"):
             cfg = Config.from_file(cfg_path)
             msgs = RunMessages()
 
-            # 1) Load
+            # Run the pipeline steps
             loaded = load_prices(cfg, msgs=msgs)
-            
-            # 2) Clean + Returns + Attribution
             cleaned = clean_and_normalize(loaded.prices, cfg)
             attrib = compute_attribution(cleaned.returns, loaded.weights) if loaded.weights is not None else None
-            
-            # 3) KPIs
             kpi = compute_kpis(cleaned.returns, cfg)
-            
-            # 4) Visuals
             figs = generate_all_figures(cleaned.prices, cleaned.returns, kpi, cfg)
-            
-            # 5) Reports
             outputs = generate_reports(cleaned.prices, cleaned.returns, kpi, figs, attrib, cfg, msgs=msgs)
 
-        st.success("Report generated successfully!")
-
-        # --- DISPLAY RESULTS IN APP ---
-        st.subheader("📊 Key Performance Indicators")
-        st.dataframe(kpi.summary, use_container_width=True)
-
-        if msgs.has_messages():
-            for warn in msgs.warnings:
-                st.warning(warn)
-
-        st.subheader("📈 Visualizations")
-        col1, col2 = st.columns(2)
-        if figs.prices:
-            col1.image(str(figs.prices), caption="Prices")
-        if figs.drawdowns and include_drawdowns:
-            col2.image(str(figs.drawdowns), caption="Drawdowns")
+            # Store results in session state to survive Streamlit reruns
+            st.session_state.kpi_summary = kpi.summary
+            st.session_state.warnings = msgs.warnings
+            st.session_state.fig_prices = str(figs.prices) if figs.prices else None
+            st.session_state.fig_drawdowns = str(figs.drawdowns) if figs.drawdowns else None
+            st.session_state.fig_boxplot = str(figs.boxplot) if figs.boxplot else None
             
-        if figs.boxplot:
-            st.image(str(figs.boxplot), caption="Return Distributions (Boxplot)")
-
-        # --- DOWNLOAD BUTTONS ---
-        st.subheader("📥 Download Reports")
-        dl_col1, dl_col2 = st.columns(2)
-        
-        if outputs.pdf and Path(outputs.pdf).exists():
             with open(outputs.pdf, "rb") as f:
-                dl_col1.download_button("Download PDF Report", f, file_name="Financial_Report.pdf", mime="application/pdf")
-                
-        if outputs.html and Path(outputs.html).exists():
+                st.session_state.pdf_bytes = f.read()
             with open(outputs.html, "rb") as f:
-                dl_col2.download_button("Download HTML Report", f, file_name="Financial_Report.html", mime="text/html")
+                st.session_state.html_bytes = f.read()
+
+            st.session_state.report_generated = True
 
     except Exception as e:
         st.error(f"Pipeline Error: {e}")
+
+# --- DISPLAY RESULTS IN APP ---
+if st.session_state.report_generated:
+    st.success("Report generated successfully!")
+
+    st.subheader("📊 Key Performance Indicators")
+    st.dataframe(st.session_state.kpi_summary, use_container_width=True)
+
+    if st.session_state.warnings:
+        for warn in st.session_state.warnings:
+            st.warning(warn)
+
+    st.subheader("📈 Visualizations")
+    col1, col2 = st.columns(2)
+    if st.session_state.fig_prices:
+        col1.image(st.session_state.fig_prices, caption="Prices")
+    if st.session_state.fig_drawdowns and include_drawdowns:
+        col2.image(st.session_state.fig_drawdowns, caption="Drawdowns")
+        
+    if st.session_state.fig_boxplot:
+        st.image(st.session_state.fig_boxplot, caption="Return Distributions (Boxplot)")
+
+    # --- DOWNLOAD BUTTONS ---
+    st.subheader("📥 Download Reports")
+    dl_col1, dl_col2 = st.columns(2)
+    
+    dl_col1.download_button("Download PDF Report", st.session_state.pdf_bytes, file_name="Financial_Report.pdf", mime="application/pdf")
+    dl_col2.download_button("Download HTML Report", st.session_state.html_bytes, file_name="Financial_Report.html", mime="text/html")
