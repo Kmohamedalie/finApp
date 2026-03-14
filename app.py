@@ -19,6 +19,23 @@ st.set_page_config(page_title="Financial Reporting Engine", layout="wide")
 st.title("📈 Financial Data Automation & Reporting")
 st.markdown("Generate comprehensive financial reports, KPIs, and visualizations interactively.")
 
+
+# --- CACHING WRAPPER ---
+@st.cache_data(show_spinner="Fetching market data...")
+def fetch_cached_data(data_dict: dict, cleaning_dict: dict):
+    """
+    Wraps the load_prices function to cache downloaded data. 
+    We reconstruct a temporary Config object just for loading so we don't 
+    trigger cache misses when the temp_dir paths change.
+    """
+    temp_cfg = Config(
+        path=Path("dummy.yaml"), 
+        data={"data": data_dict, "cleaning": cleaning_dict}
+    )
+    # Load the data via your existing loader pipeline
+    return load_prices(temp_cfg)
+
+
 # --- SIDEBAR CONFIGURATION ---
 st.sidebar.header("1. Data Configuration")
 tickers_input = st.sidebar.text_input("Tickers (comma separated)", "AAPL, MSFT, GOOG")
@@ -35,18 +52,18 @@ report_title = st.sidebar.text_input("Report Title", "Interactive Financial Repo
 include_rolling = st.sidebar.checkbox("Include Rolling Metrics", value=True)
 include_drawdowns = st.sidebar.checkbox("Include Drawdowns", value=True)
 
+
 # --- INITIALIZE SESSION STATE ---
 if "report_generated" not in st.session_state:
     st.session_state.report_generated = False
 
+
 # --- MAIN EXECUTION BLOCK ---
 if st.button("🚀 Generate Report", type="primary"):
-    # Create a temporary directory for this run's outputs and config
     temp_dir = Path(tempfile.mkdtemp())
     run_dir = temp_dir / "run"
     run_dir.mkdir(parents=True, exist_ok=True)
     
-    # Build the configuration dictionary dynamically from UI inputs
     config_dict = {
         "data": {
             "source_type": "yfinance",
@@ -83,26 +100,32 @@ if st.button("🚀 Generate Report", type="primary"):
         }
     }
     
-    # Save to a temporary YAML file so the Config class can load it
     cfg_path = temp_dir / "config.yaml"
     with open(cfg_path, "w") as f:
         yaml.dump(config_dict, f)
 
-    # --- PIPELINE EXECUTION ---
     try:
         with st.spinner("Processing data and generating reports..."):
             cfg = Config.from_file(cfg_path)
             msgs = RunMessages()
 
-            # Run the pipeline steps
-            loaded = load_prices(cfg, msgs=msgs)
+            # 1) Load (Using our new cached wrapper!)
+            loaded = fetch_cached_data(config_dict["data"], config_dict["cleaning"])
+            
+            # 2) Clean + Returns + Attribution
             cleaned = clean_and_normalize(loaded.prices, cfg)
             attrib = compute_attribution(cleaned.returns, loaded.weights) if loaded.weights is not None else None
+            
+            # 3) KPIs
             kpi = compute_kpis(cleaned.returns, cfg)
+            
+            # 4) Visuals
             figs = generate_all_figures(cleaned.prices, cleaned.returns, kpi, cfg)
+            
+            # 5) Reports
             outputs = generate_reports(cleaned.prices, cleaned.returns, kpi, figs, attrib, cfg, msgs=msgs)
 
-            # Store results in session state to survive Streamlit reruns
+            # Store results in session state
             st.session_state.kpi_summary = kpi.summary
             st.session_state.warnings = msgs.warnings
             st.session_state.fig_prices = str(figs.prices) if figs.prices else None
@@ -140,7 +163,6 @@ if st.session_state.report_generated:
     if st.session_state.fig_boxplot:
         st.image(st.session_state.fig_boxplot, caption="Return Distributions (Boxplot)")
 
-    # --- DOWNLOAD BUTTONS ---
     st.subheader("📥 Download Reports")
     dl_col1, dl_col2 = st.columns(2)
     
