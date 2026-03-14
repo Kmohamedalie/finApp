@@ -10,6 +10,7 @@ each report will include:
 
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -81,11 +82,11 @@ def generate_executive_summary(kpi: KPIResult) -> str:
 
 
     #CAGR
-    if "CAGR" in summary.columns:
-        best_cagr_asset = summary["CAGR"].idxmax()
-        best_cagr = summary["CAGR"].max()
-        worst_cagr_asset = summary["CAGR"].idxmin()
-        worst_cagr = summary["CAGR"].min()
+    if "CAGR (%)" in summary.columns:
+        best_cagr_asset = summary["CAGR (%)"].idxmax()
+        best_cagr = summary["CAGR (%)"].max() / 100.0
+        worst_cagr_asset = summary["CAGR (%)"].idxmin()
+        worst_cagr = summary["CAGR (%)"].min() / 100.0
         text_parts.append(
             f"The highest compound annual growth rate (CAGR) was observed for '{best_cagr_asset}' "
             f"at approximately {best_cagr:.2%}, while the lowest CAGR was for '{worst_cagr_asset}' "
@@ -94,9 +95,9 @@ def generate_executive_summary(kpi: KPIResult) -> str:
 
 
     #sharpe
-    if "Sharpe" in summary.columns:
-        best_sharpe_asset = summary["Sharpe"].idxmax()
-        best_sharpe = summary["Sharpe"].max()
+    if "Sharpe Ratio" in summary.columns:
+        best_sharpe_asset = summary["Sharpe Ratio"].idxmax()
+        best_sharpe = summary["Sharpe Ratio"].max()
         text_parts.append(
             f"In risk-adjusted terms (Sharpe ratio), '{best_sharpe_asset}' showed the most attractive "
             f"profile with a Sharpe ratio of about {best_sharpe:.2f}."
@@ -104,9 +105,9 @@ def generate_executive_summary(kpi: KPIResult) -> str:
 
 
     #drawdowns
-    if "Max.Drawdown" in summary.columns:
-        worst_dd_asset = summary["Max.Drawdown"].idxmin()
-        worst_dd = summary["Max.Drawdown"].min()
+    if "Max.Drawdown (%)" in summary.columns:
+        worst_dd_asset = summary["Max.Drawdown (%)"].idxmin()
+        worst_dd = summary["Max.Drawdown (%)"].min() / 100.0
         text_parts.append(
             f"The most severe maximum drawdown was recorded for '{worst_dd_asset}', "
             f"with a peak-to-trough loss of approximately {worst_dd:.2%}."
@@ -382,12 +383,17 @@ def _build_html(
 
 
     def add_img_tag(fig_path: Optional[Path], caption: str) -> None:
-        if fig_path is None:
+        if fig_path is None or not fig_path.exists():
             return
-        rel = _relative_fig_path(fig_path, output_html)
+            
+        # Read the image and encode it as a base64 string
+        with open(fig_path, "rb") as img_file:
+            b64_string = base64.b64encode(img_file.read()).decode("utf-8")
+        
+        # Embed directly into the HTML so it travels with the downloaded file
         img_tags.append(
             f'<div class="figure-block"><div class="fig-title">{caption}</div>'
-            f'<img src="{rel}" alt="{caption}"></div>'
+            f'<img src="data:image/png;base64,{b64_string}" alt="{caption}"></div>'
         )
 
 
@@ -949,7 +955,7 @@ def _build_pdf(
         return f"{x:.2f}" if isinstance(x, (int, float)) else str(x)
 
     #build rows (as strings)
-    columns = list(df.columns)  #["Asset", "CAGR", "Ann.Vol", "Sharpe", "Sortino", "Max.Drawdown"]
+    columns = list(df.columns)  
     rows = []
     for _, r in df.iterrows():
         row = [str(r["Asset"])]
@@ -960,11 +966,11 @@ def _build_pdf(
     #pretty header labels (wrap-friendly)
     pretty = {
         "Asset": "Asset",
-        "CAGR": "CAGR<br/>(%)",
-        "Ann.Vol": "Ann.Vol<br/>(%)",
-        "Sharpe": "Sharpe<br/>Ratio",
-        "Sortino": "Sortino<br/>Ratio",
-        "Max.Drawdown": "Max Drawdown<br/>(%)",
+        "CAGR (%)": "CAGR<br/>(%)",
+        "Ann.Vol (%)": "Ann.Vol<br/>(%)",
+        "Sharpe Ratio": "Sharpe<br/>Ratio",
+        "Sortino Ratio": "Sortino<br/>Ratio",
+        "Max.Drawdown (%)": "Max Drawdown<br/>(%)",
     }
 
     header_style = ParagraphStyle(
