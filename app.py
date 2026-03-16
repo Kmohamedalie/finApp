@@ -2,6 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import yaml
 import tempfile
+import pandas as pd
 from pathlib import Path
 from datetime import datetime
 
@@ -52,6 +53,12 @@ report_title = st.sidebar.text_input("Report Title", "Interactive Financial Repo
 include_rolling = st.sidebar.checkbox("Include Rolling Metrics", value=True)
 include_drawdowns = st.sidebar.checkbox("Include Drawdowns", value=True)
 
+# --- NEW: PREDICTIVE ANALYTICS SIDEBAR ---
+st.sidebar.header("4. Predictive Analytics")
+enable_forecast = st.sidebar.checkbox("Enable Price Forecast (Prophet)", value=False)
+forecast_days = st.sidebar.slider("Forecast Horizon (Days)", min_value=7, max_value=90, value=30, 
+                                  help="Number of days into the future to predict.")
+
 # --- CREDITS SECTION ---
 st.sidebar.markdown("---")
 st.sidebar.header("👨‍💻 About the Developers")
@@ -65,6 +72,8 @@ st.sidebar.markdown("""
 # --- INITIALIZE SESSION STATE ---
 if "report_generated" not in st.session_state:
     st.session_state.report_generated = False
+if "forecasts" not in st.session_state:
+    st.session_state.forecasts = None
 
 
 # --- MAIN EXECUTION BLOCK ---
@@ -126,6 +135,36 @@ if st.button("🚀 Generate Report", type="primary"):
             cleaned = clean_and_normalize(loaded.prices, cfg)
             attrib = compute_attribution(cleaned.returns, loaded.weights) if loaded.weights is not None else None
             
+            # ---> NEW: FORECASTING LOGIC <---
+            st.session_state.forecasts = None
+            if enable_forecast:
+                from prophet import Prophet
+                forecasts_dict = {}
+                
+                # Assuming cleaned.prices has dates as index and tickers as columns
+                for ticker in cleaned.prices.columns:
+                    df_p = cleaned.prices[[ticker]].reset_index()
+                    df_p.columns = ['ds', 'y']
+                    
+                    # Prophet requires timezone-naive datetimes
+                    if df_p['ds'].dt.tz is not None:
+                        df_p['ds'] = df_p['ds'].dt.tz_localize(None)
+                    
+                    # Fit model
+                    m = Prophet(daily_seasonality=False, yearly_seasonality=True)
+                    m.fit(df_p)
+                    
+                    # Predict
+                    future = m.make_future_dataframe(periods=forecast_days)
+                    fcst = m.predict(future)
+                    
+                    # Save the relevant columns (Date, Prediction, Lower Bound, Upper Bound)
+                    # We capture the last 'forecast_days' rows
+                    forecasts_dict[ticker] = fcst[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(forecast_days)
+                
+                st.session_state.forecasts = forecasts_dict
+            # ---> END FORECASTING LOGIC <---
+            
             # 3) KPIs
             kpi = compute_kpis(cleaned.returns, cfg)
             
@@ -157,16 +196,19 @@ if st.button("🚀 Generate Report", type="primary"):
 if st.session_state.report_generated:
     st.success("Report generated successfully!")
 
-    # Create the tabs (including the HTML preview)
-    tab_kpi, tab_viz, tab_report, tab_dl = st.tabs([
-        "📊 KPIs & Analysis", 
-        "📈 Visualizations", 
-        "📄 View Report",
-        "📥 Downloads"
-    ])
+    # Dynamically create tabs based on whether forecasts exist
+    tab_names = ["📊 KPIs & Analysis", "📈 Visualizations"]
+    has_forecast = st.session_state.get("forecasts") is not None
+    
+    if has_forecast:
+        tab_names.append("🔮 Predictions")
+        
+    tab_names.extend(["📄 View Report", "📥 Downloads"])
+
+    tabs = st.tabs(tab_names)
 
     # --- TAB 1: KPIs & Analysis ---
-    with tab_kpi:
+    with tabs[0]:
         st.subheader("Key Performance Indicators")
         st.dataframe(st.session_state.kpi_summary, use_container_width=True)
 
@@ -176,7 +218,7 @@ if st.session_state.report_generated:
                 st.warning(warn)
 
     # --- TAB 2: Visualizations ---
-    with tab_viz:
+    with tabs[1]:
         st.subheader("Market Visualizations")
         
         # Prices and Drawdowns side-by-side
@@ -192,8 +234,30 @@ if st.session_state.report_generated:
             st.markdown("---")
             st.image(st.session_state.fig_boxplot, caption="Return Distributions (Boxplot)", use_container_width=True)
 
-    # --- TAB 3: View HTML Report ---
-    with tab_report:
+    # --- TAB 3 (OPTIONAL): Predictions ---
+    current_tab_idx = 2
+    if has_forecast:
+        with tabs[current_tab_idx]:
+            st.subheader(f"Price Forecast ({forecast_days} Days)")
+            st.markdown("Powered by Facebook Prophet. **Note:** Predictions are based on historical trends and seasonality, not guarantees of future performance.")
+            
+            for ticker, forecast_df in st.session_state.forecasts.items():
+                st.markdown(f"### {ticker}")
+                
+                # Format for Streamlit Line Chart
+                plot_df = forecast_df.set_index('ds')
+                plot_df.columns = ['Predicted Price', 'Lower Bound', 'Upper Bound']
+                
+                st.line_chart(plot_df)
+                
+                # Optional: Show the raw numbers inside an expander
+                with st.expander(f"View Raw Forecast Data for {ticker}"):
+                    st.dataframe(plot_df, use_container_width=True)
+                    
+        current_tab_idx += 1
+
+    # --- NEXT TAB: View HTML Report ---
+    with tabs[current_tab_idx]:
         st.subheader("Interactive Report Preview")
         st.info("Scroll through the full generated HTML report below.")
         
@@ -201,8 +265,8 @@ if st.session_state.report_generated:
         html_string = st.session_state.html_bytes.decode("utf-8")
         components.html(html_string, height=800, scrolling=True)
 
-    # --- TAB 4: Downloads ---
-    with tab_dl:
+    # --- FINAL TAB: Downloads ---
+    with tabs[current_tab_idx + 1]:
         st.subheader("Download Generated Reports")
         st.markdown("Grab the fully formatted PDF or interactive HTML reports below.")
         
