@@ -2,6 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import yaml
 import tempfile
+import pandas as pd
 from pathlib import Path
 from datetime import datetime
 
@@ -80,11 +81,13 @@ if st.button("🚀 Generate Report", type="primary"):
     run_dir = temp_dir / "run"
     run_dir.mkdir(parents=True, exist_ok=True)
     
+    input_tickers = [t.strip() for t in tickers_input.split(",")]
+    
     # Build the configuration dictionary dynamically from UI inputs
     config_dict = {
         "data": {
             "source_type": "yfinance",
-            "tickers": [t.strip() for t in tickers_input.split(",")],
+            "tickers": input_tickers,
             "start_date": start_date.strftime("%Y-%m-%d"),
             "end_date": end_date.strftime("%Y-%m-%d"),
             "base_currency": base_currency,
@@ -93,7 +96,7 @@ if st.button("🚀 Generate Report", type="primary"):
         "cleaning": {
             "na_strategy": "ffill_then_bfill",
             "return_type": "log",
-            "align_method": "inner",
+            "align_method": "outer",  # <--- FIXED: Changed from 'inner' to 'outer' to prevent 0-row errors
             "min_rows": 30
         },
         "kpis": {
@@ -129,6 +132,15 @@ if st.button("🚀 Generate Report", type="primary"):
             # 1) Load (Using our cached wrapper)
             loaded = fetch_cached_data(config_dict["data"], config_dict["cleaning"])
             
+            # Catch bad tickers before they crash the pipeline
+            if loaded.prices.empty:
+                st.error("No data could be downloaded for the provided tickers. Please check your spelling or date range.")
+                st.stop()
+                
+            missing_tickers = [t for t in input_tickers if t not in loaded.prices.columns]
+            if missing_tickers:
+                st.warning(f"⚠️ Could not fetch data for: {', '.join(missing_tickers)}. They will be excluded from the report.")
+            
             # 2) Clean + Returns + Attribution
             cleaned = clean_and_normalize(loaded.prices, cfg)
             attrib = compute_attribution(cleaned.returns, loaded.weights) if loaded.weights is not None else None
@@ -139,7 +151,7 @@ if st.button("🚀 Generate Report", type="primary"):
                 from prophet import Prophet
                 forecasts_dict = {}
                 
-                # Iterate through each ticker in the cleaned prices
+                # Iterate through each valid ticker in the cleaned prices
                 for ticker in cleaned.prices.columns:
                     df_p = cleaned.prices[[ticker]].reset_index()
                     df_p.columns = ['ds', 'y']
