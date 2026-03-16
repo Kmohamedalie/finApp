@@ -2,7 +2,6 @@ import streamlit as st
 import streamlit.components.v1 as components
 import yaml
 import tempfile
-import pandas as pd
 from pathlib import Path
 from datetime import datetime
 
@@ -55,9 +54,8 @@ include_drawdowns = st.sidebar.checkbox("Include Drawdowns", value=True)
 
 # --- NEW: PREDICTIVE ANALYTICS SIDEBAR ---
 st.sidebar.header("4. Predictive Analytics")
-enable_forecast = st.sidebar.checkbox("Enable Price Forecast (Prophet)", value=False)
-forecast_days = st.sidebar.slider("Forecast Horizon (Days)", min_value=7, max_value=90, value=30, 
-                                  help="Number of days into the future to predict.")
+enable_forecast = st.sidebar.checkbox("Enable Price Forecast", value=False, help="Uses Prophet to forecast future prices.")
+forecast_days = st.sidebar.slider("Forecast Horizon (Days)", min_value=7, max_value=90, value=30)
 
 # --- CREDITS SECTION ---
 st.sidebar.markdown("---")
@@ -141,7 +139,7 @@ if st.button("🚀 Generate Report", type="primary"):
                 from prophet import Prophet
                 forecasts_dict = {}
                 
-                # Assuming cleaned.prices has dates as index and tickers as columns
+                # Iterate through each ticker in the cleaned prices
                 for ticker in cleaned.prices.columns:
                     df_p = cleaned.prices[[ticker]].reset_index()
                     df_p.columns = ['ds', 'y']
@@ -154,17 +152,16 @@ if st.button("🚀 Generate Report", type="primary"):
                     m = Prophet(daily_seasonality=False, yearly_seasonality=True)
                     m.fit(df_p)
                     
-                    # Predict
+                    # Predict future prices
                     future = m.make_future_dataframe(periods=forecast_days)
                     fcst = m.predict(future)
                     
-                    # Save the relevant columns (Date, Prediction, Lower Bound, Upper Bound)
-                    # We capture the last 'forecast_days' rows
+                    # Save the relevant columns for the forecast horizon
                     forecasts_dict[ticker] = fcst[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(forecast_days)
                 
                 st.session_state.forecasts = forecasts_dict
             # ---> END FORECASTING LOGIC <---
-            
+
             # 3) KPIs
             kpi = compute_kpis(cleaned.returns, cfg)
             
@@ -196,7 +193,7 @@ if st.button("🚀 Generate Report", type="primary"):
 if st.session_state.report_generated:
     st.success("Report generated successfully!")
 
-    # Dynamically create tabs based on whether forecasts exist
+    # Dynamically define tab names based on whether a forecast was run
     tab_names = ["📊 KPIs & Analysis", "📈 Visualizations"]
     has_forecast = st.session_state.get("forecasts") is not None
     
@@ -205,6 +202,7 @@ if st.session_state.report_generated:
         
     tab_names.extend(["📄 View Report", "📥 Downloads"])
 
+    # Create the dynamic tabs
     tabs = st.tabs(tab_names)
 
     # --- TAB 1: KPIs & Analysis ---
