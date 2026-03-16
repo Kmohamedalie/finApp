@@ -3,6 +3,9 @@ pandas
 numpy
 PyYAML
 yfinance
-matplotlib
+matplotlib # Assuming you use this in your src.viz
 reportlab
 openpyxl
+pyyaml
+prophet
+plotly        # Assuming you use this in your src.viz    # Assuming you use this in your src.viz
