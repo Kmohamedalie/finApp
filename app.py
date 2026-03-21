@@ -17,6 +17,29 @@ from src.messages import RunMessages
 
 st.set_page_config(page_title="Financial Reporting Engine", layout="wide")
 
+# Custom CSS to swap the sidebar toggle icon
+hamburger_css = """
+<style>
+/* Hide the default Streamlit SVG arrow */
+button[data-testid="collapsedControl"] svg,
+button[data-testid="stBaseButton-headerNoPadding"] svg {
+    display: none !important;
+}
+
+/* Insert the universal hamburger icon (☰) */
+button[data-testid="collapsedControl"]::before,
+button[data-testid="stBaseButton-headerNoPadding"]::before {
+    content: "☰";
+    font-size: 24px;
+    font-weight: bold;
+    color: currentColor;
+}
+</style>
+"""
+
+# Inject the CSS into the app
+st.markdown(hamburger_css, unsafe_allow_html=True)
+
 st.title("📈 Financial Data Automation & Reporting")
 st.markdown("Generate comprehensive financial reports, KPIs, and visualizations interactively.")
 
