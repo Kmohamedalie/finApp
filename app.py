@@ -25,18 +25,6 @@ hamburger_css = """
 [data-testid="stSidebarCollapseButton"] svg {
     display: none !important;
 }
-
-/* 2. Insert the universal hamburger icon (☰) into both buttons */
-[data-testid="collapsedControl"]::before,
-[data-testid="stSidebarCollapseButton"]::before {
-    content: "☰";
-    font-size: 24px;
-    font-weight: bold;
-    color: currentColor;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
 </style>
 """
 
