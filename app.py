@@ -20,29 +20,22 @@ st.set_page_config(page_title="Financial Reporting Engine", layout="wide")
 # Custom CSS to swap the sidebar toggle icon
 hamburger_css = """
 <style>
-/* Hide the default Streamlit SVG arrow */
-button[data-testid="collapsedControl"] svg,
-button[data-testid="stBaseButton-headerNoPadding"] svg {
+/* 1. Hide the SVG arrows for both the collapsed and expanded sidebar states */
+[data-testid="collapsedControl"] svg,
+[data-testid="stSidebarCollapseButton"] svg {
     display: none !important;
 }
 
-/* Insert the universal hamburger icon (☰) */
-button[data-testid="collapsedControl"]::before,
-button[data-testid="stBaseButton-headerNoPadding"]::before {
+/* 2. Insert the universal hamburger icon (☰) into both buttons */
+[data-testid="collapsedControl"]::before,
+[data-testid="stSidebarCollapseButton"]::before {
     content: "☰";
     font-size: 24px;
     font-weight: bold;
     color: currentColor;
-
-/* Hide the button that opens the sidebar */
-[data-testid="collapsedControl"] {
-    display: none !important;
-}
-
-/* Hide the button that closes the sidebar (when it is already open) */
-[data-testid="stSidebarCollapseButton"],
-[data-testid="baseButton-headerNoPadding"] {
-    display: none !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 </style>
 """
