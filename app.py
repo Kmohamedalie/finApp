@@ -33,6 +33,16 @@ button[data-testid="stBaseButton-headerNoPadding"]::before {
     font-size: 24px;
     font-weight: bold;
     color: currentColor;
+
+/* Hide the button that opens the sidebar */
+[data-testid="collapsedControl"] {
+    display: none !important;
+}
+
+/* Hide the button that closes the sidebar (when it is already open) */
+[data-testid="stSidebarCollapseButton"],
+[data-testid="baseButton-headerNoPadding"] {
+    display: none !important;
 }
 </style>
 """
